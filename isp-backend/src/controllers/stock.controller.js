@@ -71,7 +71,6 @@ const verStock = async (req, res, next) => {
       },
       include: { producto: true },
       orderBy: { producto: { nombre: 'asc' } },
-      take: 20,
     });
 
     res.json(stock.map(mapStock));
