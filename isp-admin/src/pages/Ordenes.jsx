@@ -508,7 +508,7 @@ export default function OrdenesPage() {
     queryKey: ['ordenes', filters, tab, page],
     queryFn:  () => ordenesApi.listar({
       ...filters,
-      page, limit: 15,
+      page, limit: 25,
       ...(tab === 'internet' && { tipos: (grupos.INTERNET || []).join(',') }),
       ...(tab === 'cable'    && { tipos: (grupos.CABLE    || []).join(',') }),
       ...(tab === 'duo'      && { tipos: (grupos.DUO      || []).join(',') }),

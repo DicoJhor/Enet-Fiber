@@ -212,52 +212,55 @@ const listar = async (req, res, next) => {
       });
     }
 
-    // Sin filtro de estado: completadas siempre al final, pero PAGINADO real
-    const totalNoComp = await prisma.ordenServicio.count({
-      where: { ...where, estado: { not: 'COMPLETADA' } },
-    });
+    // Sin filtro de estado: orden de prioridad con paginación real
+    // Si ya filtra por tecnicoId, no separar por asignación (no tendría sentido)
+    const filtraPorTecnico = !!where.tecnicoId;
 
-    // Página totalmente dentro de las completadas
-    if (skip >= totalNoComp) {
-      const ordenes = await prisma.ordenServicio.findMany({
-        where:   { ...where, estado: 'COMPLETADA' },
-        include: { tecnico: includeTecnico, instalacion: includeInstalacion, sede: includeSede },
-        orderBy: { createdAt: 'desc' },
-        skip:    skip - totalNoComp,
-        take:    Number(limit),
-      });
+    const GRUPOS = filtraPorTecnico
+      ? [
+          { where: { ...where, estado: { notIn: ['COMPLETADA', 'CANCELADA'] } } },
+          { where: { ...where, estado: 'COMPLETADA' } },
+          { where: { ...where, estado: 'CANCELADA' } },
+        ]
+      : [
+          { where: { ...where, estado: { notIn: ['COMPLETADA', 'CANCELADA'] }, tecnicoId: null } },
+          { where: { ...where, estado: { notIn: ['COMPLETADA', 'CANCELADA'] }, tecnicoId: { not: null } } },
+          { where: { ...where, estado: 'COMPLETADA' } },
+          { where: { ...where, estado: 'CANCELADA' } },
+        ];
+
+      // Contar cada grupo
+      const totalesPorGrupo = await Promise.all(
+        GRUPOS.map(g => prisma.ordenServicio.count({ where: g.where }))
+      );
+
+      let ordenes = [];
+      let restante = Number(limit);
+      let skipRestante = skip;
+
+      for (let i = 0; i < GRUPOS.length && restante > 0; i++) {
+        const tamGrupo = totalesPorGrupo[i];
+        if (skipRestante >= tamGrupo) { skipRestante -= tamGrupo; continue; }
+
+        const items = await prisma.ordenServicio.findMany({
+          where:   GRUPOS[i].where,
+          include: { tecnico: includeTecnico, instalacion: includeInstalacion, sede: includeSede },
+          orderBy: { createdAt: 'desc' },
+          skip:    skipRestante,
+          take:    restante,
+        });
+
+        ordenes = [...ordenes, ...items];
+        restante -= items.length;
+        skipRestante = 0;
+      }
+
       return res.json({
         data: ordenes,
-        meta: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / limit) },
+        meta: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) },
       });
-    }
 
-    // Página que empieza en no-completadas (puede saltar a completadas al final)
-    const takeNoComp = Math.min(Number(limit), totalNoComp - skip);
-    const noComp = await prisma.ordenServicio.findMany({
-      where:   { ...where, estado: { not: 'COMPLETADA' } },
-      include: { tecnico: includeTecnico, instalacion: includeInstalacion, sede: includeSede },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take:    takeNoComp,
-    });
-
-    let ordenes = noComp;
-    const faltan = Number(limit) - noComp.length;
-    if (faltan > 0) {
-      const comp = await prisma.ordenServicio.findMany({
-        where:   { ...where, estado: 'COMPLETADA' },
-        include: { tecnico: includeTecnico, instalacion: includeInstalacion, sede: includeSede },
-        orderBy: { createdAt: 'desc' },
-        take:    faltan,
-      });
-      ordenes = [...noComp, ...comp];
-    }
-
-    res.json({
-      data: ordenes,
-      meta: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / limit) },
-    });
+   
     
   } catch (err) { next(err); }
 };

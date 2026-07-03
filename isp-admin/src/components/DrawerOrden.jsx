@@ -134,6 +134,10 @@ export default function DrawerOrden({ ordenId, onCerrar }) {
                 {orden.referencia && <FilaDato label="Referencia" value={orden.referencia}/>}
                 {orden.sector    && <FilaDato label="Sector"    value={orden.sector}/>}
                 {orden.plan?.nombre && <FilaDato label="Plan"   value={orden.plan.nombre} last/>}
+                {(orden.precinto || orden.contratoRef?.precinto) && (
+                  <FilaDato label="Precinto" value={orden.precinto || orden.contratoRef?.precinto} mono
+                    onCopy={() => copiar(orden.precinto || orden.contratoRef?.precinto, 'Precinto copiado')}/>
+                )}
                 {orden.observacion && (
                   <div style={{
                     margin: '8px 0', padding: '8px 12px',
@@ -309,9 +313,15 @@ export default function DrawerOrden({ ordenId, onCerrar }) {
                     }
 
                     const sn = orden.instalacion?.configOnu?.serialNumber;
-                    if (sn) {
-                      lineas.push(`SERIE PON: ${sn}`);
-                    }
+                      if (sn) {
+                        lineas.push(`SERIE PON: ${sn}`);
+                      }
+
+                      const precinto = orden.precinto || orden.contratoRef?.precinto;
+                      if (precinto) {
+                        lineas.push(`PRECINTO: ${precinto}`);
+                      }
+
 
                     if (!esRetiro && orden.consumos?.length > 0) {
                       const items = orden.consumos.map(c => {
