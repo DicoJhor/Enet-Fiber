@@ -435,9 +435,11 @@ async function main() {
  
   // EQUIPOS
   { id: 308, nombre: 'Laptop HP i3',    codigo: 'EQU-HP-001', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-22T16:56:09.000Z' },
-  { id: 311, nombre: 'OLT 610',         codigo: 'EQU-HP-002', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-24T14:57:25.000Z' },
-  { id: 312, nombre: 'CHASIS OLT 600',  codigo: 'EQU-HP-003', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-24T14:57:46.000Z' },
- 
+  { id: 311, nombre: 'CHASIS OLT ZXA10 C600',         codigo: 'EQU-HP-002', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-24T14:57:25.000Z' },
+  { id: 312, nombre: 'CHASIS OLT ZXA10 C610',         codigo: 'EQU-HP-002', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-24T14:57:25.000Z' },
+  { id: 900, nombre: 'CHASIS OLT ZXA10 C620',         codigo: 'EQU-HP-900', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-24T14:57:46.000Z' },
+  { id: 901, nombre: 'CHASIS OLT ZXPON C300',         codigo: 'EQU-HP-901', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-24T14:57:25.000Z' },
+  { id: 902, nombre: 'CHASIS OLT ZXPON C320',         codigo: 'EQU-HP-902', categoria: 'Equipos', unidad: 'unidad', esMedible: false, metrosPorUnidad: null, metrosDisponibles: null, tieneVariantes: false, estado: true, stockTotal: 0, stockMinimo: 0, createdAt: '2026-04-24T14:57:25.000Z' },
   ],
     skipDuplicates: true,
   });

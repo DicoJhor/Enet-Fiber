@@ -1,6 +1,20 @@
 const prisma = require('../utils/prisma');
 const mysql  = require('mysql2/promise');
 const { encrypt, decrypt } = require('./siscadre/encryption');
+const { TIPOS_NOC_TECNICO } = require('../utils/tipoOrden');
+
+
+// Mismos tipos que ordenes.controller.js — que el NOC completa manualmente sin técnico
+const TIPOS_NOC_COMPLETA = [
+  'CORTE_DEUDA_I', 'CORTE_SOLICITUD_I',
+  'CAMBIO_TITULAR_I', 'CAMBIO_PLAN_I', 'CAMBIO_CONTRASENA_I',
+  'ALTA_SERVICIO_I', 'BAJA_SERVICIO_I', 'ATENCION_NOC_I',
+  'CORTE_DEUDA_D', 'CORTE_SOLICITUD_D',
+  'CAMBIO_TITULAR_D', 'CAMBIO_PLAN_D',
+  'ALTA_SERVICIO_D', 'BAJA_SERVICIO_D',
+];
+
+const TIPOS_NOC = [...TIPOS_NOC_TECNICO, ...TIPOS_NOC_COMPLETA];
 
 // ── Mapear tipo de servicio Siscadre → enum TipoOrden ────────
 // Copia independiente de detectarTipo() (excel.service.js) para que
@@ -277,22 +291,57 @@ const sincronizar = async (req, res, next) => {
           .replace(/,/g, '');
         const mensualidad = mensualidadStr === 'S/N' ? null : (parseFloat(mensualidadStr) || null);
 
+        const numeroContrato = String(row['NÚMERO DE CONTRATO'] || '').trim();
+        const abonado    = row['ABONADO']                || 'S/N';
+        const dni        = row['DOCUMENTO DE IDENTIDAD'] || null;
+        const celular    = row['TELÉFONO']               || null;
+        const direccion  = row['DIRECCIÓN']              || 'S/D';
+        const referencia = row['REFERENCIA']             || null;
+        const sector     = row['SECTOR']                 || null;
+
+        // Asegurar que el contrato exista antes de crear la orden
+        // (misma lógica que confirmarExcel en contratos.controller.js)
+        if (numeroContrato) {
+          await prisma.contrato.upsert({
+            where: { numero_sedeId: { numero: numeroContrato, sedeId } },
+            create: {
+              numero: numeroContrato,
+              abonado,
+              dni,
+              celular,
+              direccion,
+              referencia,
+              sector,
+              sedeId,
+            },
+            update: {
+              abonado,
+              direccion,
+              ...(dni        && { dni }),
+              ...(celular    && { celular }),
+              ...(referencia && { referencia }),
+              ...(sector     && { sector }),
+              // sedeId NO se actualiza — el contrato vive en la sede que lo creó
+            },
+          });
+        }
+
         await prisma.ordenServicio.create({
           data: {
             nServicio,
             codigoSiscadre: codigoCompleto,
             sedeId,
-            estado:        'PENDIENTE_NOC',
+            estado:        TIPOS_NOC.includes(tipoOrden) ? 'PENDIENTE_NOC' : 'PENDIENTE_TECNICO',
             tipoOrden,
             fechaServicio: parsearFecha(row['FECHA CREA']),
-            abonado:       row['ABONADO']                 || 'S/N',
-            dni:           row['DOCUMENTO DE IDENTIDAD']  || null,
-            direccion:     row['DIRECCIÓN']               || 'S/D',
-            referencia:    row['REFERENCIA']              || null,
-            sector:        row['SECTOR']                  || null,
-            celular:       row['TELÉFONO']                || 'S/N',
-            observacion:   row['OBSERVACIÓN INICIAL']     || null,
-            contrato:      String(row['NÚMERO DE CONTRATO'] || ''),
+            abonado,
+            dni,
+            direccion,
+            referencia,
+            sector,
+            celular:       celular || 'S/N',
+            observacion:   row['OBSERVACIÓN INICIAL'] || null,
+            contrato:      numeroContrato || null,
             mensualidad,
           },
         });
@@ -300,6 +349,7 @@ const sincronizar = async (req, res, next) => {
         nuevas++;
         detalles.push({ codigo: codigoCompleto, estado: 'importada' });
 
+      
       } catch (err) {
         if (err.code === 'P2002') {
           existentes++;

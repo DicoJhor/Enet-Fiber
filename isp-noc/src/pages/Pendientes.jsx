@@ -24,7 +24,7 @@ const TIPOS_NOC_COMPLETA = [
 
 
 
-function useIsMobile(breakpoint = 640) {
+function useIsMobile(breakpoint = 1110) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < breakpoint);
@@ -942,10 +942,10 @@ const { data: dataConfiguradas } = useQuery({
   gcTime: 0,
 });
 
-  const ordenesPendientesWan = (dataWan?.data || [])
-    .filter(o => TODOS_TECNICO.includes(o.tipoOrden) && o.tecnico);
-
-  const ordenesPendienteNoc = (dataCompletar?.data || [])
+    const ordenesPendientesWan = (dataWan?.data || [])
+        .filter(o => TODOS_TECNICO.includes(o.tipoOrden));
+  
+    const ordenesPendienteNoc = (dataCompletar?.data || [])
     .filter(o => TIPOS_NOC_COMPLETA.includes(o.tipoOrden));
 
   const ordenesConfiguradas = (dataConfiguradas?.data || []);

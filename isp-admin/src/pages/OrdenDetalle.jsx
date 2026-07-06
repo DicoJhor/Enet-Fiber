@@ -96,9 +96,7 @@ export default function OrdenDetalle() {
   const { tipoLabel, esInternet: esInternetFn, esDeGrupo } = useTiposOrden();
   const navigate = useNavigate();
   const qc       = useQueryClient();
-  const [showAsignar, setShowAsignar] = useState(false);
   const [showFicha,   setShowFicha]   = useState(false);
-  const [tecnicoId,   setTecnicoId]   = useState('');
 
   const { data: orden, isLoading } = useQuery({
     queryKey: ['orden', id],
@@ -109,13 +107,6 @@ export default function OrdenDetalle() {
   const { data: tecnicos } = useQuery({
     queryKey: ['tecnicos-activos'],
     queryFn:  () => tecnicosApi.listar({ activo: true }).then(r => r.data),
-    enabled:  showAsignar,
-  });
-
-  const asignarMut = useMutation({
-    mutationFn: () => ordenesApi.asignar(id, tecnicoId),
-    onSuccess:  () => { toast.success('Técnico asignado'); qc.invalidateQueries(['orden', id]); setShowAsignar(false); },
-    onError:    e  => toast.error(e.response?.data?.error || 'Error'),
   });
 
   const estadoMut = useMutation({
@@ -169,9 +160,6 @@ export default function OrdenDetalle() {
               <option key={s} value={s}>{s.replace(/_/g,' ')}</option>
             ))}
           </select>
-          {!orden.tecnico && (
-            <Btn variant="primary" size="sm" onClick={() => setShowAsignar(true)}>Asignar técnico</Btn>
-          )}
         </div>
       </div>
 
@@ -263,35 +251,29 @@ export default function OrdenDetalle() {
           )}
 
           <Card>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: 'var(--txt-3)', marginBottom: 10, letterSpacing: '0.06em' }}>TÉCNICO ASIGNADO</h3>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: 'var(--txt-3)', marginBottom: 10, letterSpacing: '0.06em' }}>TÉCNICO</h3>
             {orden.tecnico ? (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <Avatar nombre={orden.tecnico.usuario.nombre} apellido={orden.tecnico.usuario.apellido} size={38} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{orden.tecnico.usuario.nombre} {orden.tecnico.usuario.apellido}</div>
-                    <div style={{ fontSize: 11, color: 'var(--txt-3)' }}>{orden.tecnico.zonaAsignada || 'Sin zona'}</div>
-                  </div>
-                  {orden.tecnico.usuario.telefono && (
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                      <a href={`tel:${orden.tecnico.usuario.telefono}`}>
-                        <Btn variant="ghost" size="sm" icon={<Phone size={12} />} />
-                      </a>
-                      <a href={waLink(orden.tecnico.usuario.telefono)} target="_blank" rel="noreferrer">
-                        <Btn variant="success" size="sm" icon={<MessageCircle size={12} />} />
-                      </a>
-                    </div>
-                  )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Avatar nombre={orden.tecnico.usuario.nombre} apellido={orden.tecnico.usuario.apellido} size={38} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{orden.tecnico.usuario.nombre} {orden.tecnico.usuario.apellido}</div>
+                  <div style={{ fontSize: 11, color: 'var(--txt-3)' }}>{orden.tecnico.zonaAsignada || 'Sin zona'}</div>
                 </div>
-                {orden.estado !== 'COMPLETADA' && orden.estado !== 'CANCELADA' && (
-                  <Btn variant="ghost" size="sm" onClick={() => setShowAsignar(true)}
-                    style={{ width: '100%', justifyContent: 'center', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
-                    ↻ Cambiar técnico
-                  </Btn>
+                {orden.tecnico.usuario.telefono && (
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                    <a href={`tel:${orden.tecnico.usuario.telefono}`}>
+                      <Btn variant="ghost" size="sm" icon={<Phone size={12} />} />
+                    </a>
+                    <a href={waLink(orden.tecnico.usuario.telefono)} target="_blank" rel="noreferrer">
+                      <Btn variant="success" size="sm" icon={<MessageCircle size={12} />} />
+                    </a>
+                  </div>
                 )}
               </div>
             ) : (
-              <Btn variant="primary" size="sm" onClick={() => setShowAsignar(true)}>Asignar técnico</Btn>
+              <div style={{ padding: '12px 0', textAlign: 'center', color: 'var(--txt-3)', fontSize: 12 }}>
+                🕓 Esperando que un técnico tome esta orden
+              </div>
             )}
           </Card>
         </div>
@@ -398,22 +380,6 @@ export default function OrdenDetalle() {
           </Card>
         )}
       </div>
-
-      {/* Modal asignar técnico */}
-      <Modal open={showAsignar} onClose={() => setShowAsignar(false)} title="Asignar técnico" width={380}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Select label="Técnico" value={tecnicoId} onChange={e => setTecnicoId(e.target.value)}>
-            <option value="">— Seleccionar —</option>
-            {(tecnicos || []).map(t => (
-              <option key={t.id} value={t.id}>{t.usuario.nombre} {t.usuario.apellido}</option>
-            ))}
-          </Select>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <Btn variant="ghost" onClick={() => setShowAsignar(false)}>Cancelar</Btn>
-            <Btn variant="primary" disabled={!tecnicoId} loading={asignarMut.isPending} onClick={() => asignarMut.mutate()}>Asignar</Btn>
-          </div>
-        </div>
-      </Modal>
 
       {/* Modal ficha completa */}
       {inst && (

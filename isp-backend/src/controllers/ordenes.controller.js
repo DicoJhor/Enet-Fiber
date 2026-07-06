@@ -141,12 +141,24 @@ const listar = async (req, res, next) => {
 
     let where = { deletedAt: null }; // excluir órdenes en papelera
 
-    if (rol === 'TECNICO') {
-      where = {
-        tecnico: { usuarioId: req.usuario.id },
-        estado:  { in: ['PENDIENTE_TECNICO', 'ACEPTADA', 'EN_PROCESO', 'COMPLETADA'] },
-      };
-    } else if (esRolNoc(rol)) {
+    // DESPUÉS:
+      if (rol === 'TECNICO') {
+        where = {
+          sedeId: miSede,
+          OR: [
+            // Sus propias órdenes (ya tomadas por él, en cualquier estado del flujo)
+            {
+              tecnico: { usuarioId: req.usuario.id },
+              estado:  { in: ['ACEPTADA', 'EN_PROCESO', 'COMPLETADA'] },
+            },
+            // El pool: disponibles para cualquier técnico de la sede
+            {
+              estado:    'PENDIENTE_TECNICO',
+              tecnicoId: null,
+            },
+          ],
+        };
+      }else if (esRolNoc(rol)) {
       // Si el frontend manda `tipos` explícito lo respetamos.
       // Si no, el NOC ve Internet + Dúo por defecto (ambos necesitan gestión WAN).
       const tiposNoc = tipos
@@ -193,6 +205,32 @@ const listar = async (req, res, next) => {
     };
 
     const includeSede = { select: { id: true, nombre: true, ciudad: true } };
+    
+    // Rol TÉCNICO: camino simple y directo, sin la lógica de prioridades de NOC/Admin
+    if (rol === 'TECNICO') {
+      const totalTecnico = await prisma.ordenServicio.count({ where });
+      const ordenesTecnico = await prisma.ordenServicio.findMany({
+        where,
+        include: {
+          tecnico: { include: { usuario: { select: { nombre: true, apellido: true, telefono: true } } } },
+          instalacion: {
+            select: {
+              id: true, completada: true, pendienteSincronizar: true,
+              latitud: true, longitud: true,
+              configOnu: { select: { ssid: true, serialNumber: true, potenciaRx: true, potenciaTx: true, temperatura: true } },
+            },
+          },
+          sede: { select: { id: true, nombre: true, ciudad: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (Number(page) - 1) * Number(limit),
+        take: Number(limit),
+      });
+      return res.json({
+        data: ordenesTecnico,
+        meta: { total: totalTecnico, page: Number(page), limit: Number(limit), pages: Math.ceil(totalTecnico / Number(limit)) },
+      });
+    }
 
     const skip  = (Number(page) - 1) * Number(limit);
     const total = await prisma.ordenServicio.count({ where });
@@ -629,9 +667,6 @@ const ponerWan = async (req, res, next) => {
     const orden = await prisma.ordenServicio.findUnique({ where: { id: req.params.id } });
     if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
 
-    if (orden.estado === 'PENDIENTE_NOC' && !orden.tecnicoId)
-      return res.status(422).json({ error: 'La orden no tiene técnico asignado aún' });
-
     if (!['PENDIENTE_NOC', 'PENDIENTE_TECNICO'].includes(orden.estado))
       return res.status(422).json({ error: `Estado inválido: ${orden.estado}` });
 
@@ -719,25 +754,53 @@ const nocCompletar = async (req, res, next) => {
 // ── PATCH /api/ordenes/:id/aceptar (TECNICO) ─────────────────
 const aceptar = async (req, res, next) => {
   try {
-    const { fechaAceptacion } = req.body;   // ← opcional: fecha real del técnico (offline)
+    const { fechaAceptacion } = req.body;
 
-    const orden = await prisma.ordenServicio.findUnique({ where: { id: req.params.id }, include: { tecnico: true } });
+    // Obtener el técnico correspondiente al usuario logueado
+    const tecnico = await prisma.tecnico.findUnique({
+      where: { usuarioId: req.usuario.id },
+      select: { id: true, usuarioId: true },
+    });
+    if (!tecnico) return res.status(403).json({ error: 'Tu usuario no tiene perfil de técnico' });
+
+    const orden = await prisma.ordenServicio.findUnique({ where: { id: req.params.id } });
     if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
 
-    if (orden.tecnico?.usuarioId !== req.usuario.id)
-      return res.status(403).json({ error: 'No eres el técnico asignado' });
+    // El técnico debe ser de la misma sede que la orden
+    const usuarioTecnico = await prisma.usuario.findUnique({
+      where: { id: req.usuario.id },
+      select: { sedeId: true },
+    });
+    if (usuarioTecnico?.sedeId !== orden.sedeId)
+      return res.status(403).json({ error: 'Esta orden no pertenece a tu sede' });
 
     if (orden.estado !== 'PENDIENTE_TECNICO')
       return res.status(422).json({ error: `No puedes aceptar una orden en estado ${orden.estado}` });
 
-    // Si la app manda la fecha real (aceptación offline), usarla.
-    // Si no, usar "ahora" (aceptación online normal).
     const fecha = fechaAceptacion ? new Date(fechaAceptacion) : new Date();
 
-    const actualizada = await prisma.ordenServicio.update({
-      where: { id: req.params.id },
-      data:  { estado: 'ACEPTADA', fechaAceptacion: fecha },
+    // ── Asignación atómica: solo el primero que llegue se la queda ──
+    // updateMany con tecnicoId: null en el where evita condición de carrera:
+    // si otro técnico ya la tomó entre el findUnique y aquí, count será 0.
+    const resultado = await prisma.ordenServicio.updateMany({
+      where: {
+        id:        req.params.id,
+        estado:    'PENDIENTE_TECNICO',
+        tecnicoId: null, // ← clave: solo si sigue sin dueño
+      },
+      data: {
+        tecnicoId:       tecnico.id,
+        fechaAsignacion: fecha,
+        estado:          'ACEPTADA',
+        fechaAceptacion: fecha,
+      },
     });
+
+    if (resultado.count === 0) {
+      return res.status(409).json({ error: 'Esta orden ya fue tomada por otro técnico' });
+    }
+
+    const actualizada = await prisma.ordenServicio.findUnique({ where: { id: req.params.id } });
 
     res.json({ orden: actualizada, mensaje: '✅ Orden aceptada.' });
   } catch (err) { next(err); }
