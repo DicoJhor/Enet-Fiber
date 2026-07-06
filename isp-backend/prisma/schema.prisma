@@ -85,6 +85,12 @@ model Tecnico {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
   sedeId        String?             @db.VarChar(36)
+
+  // ── Ubicación en tiempo real ────────────────────────────────
+  ultimaLat         Float?    @map("ultima_lat")
+  ultimaLng         Float?    @map("ultima_lng")
+  ultimaUbicacionAt DateTime? @map("ultima_ubicacion_at")
+
   asignaciones  AsignacionTecnico[]
   consumos      ConsumoTecnico[]
   devoluciones  DevolucionTecnico[]

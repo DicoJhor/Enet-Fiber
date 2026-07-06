@@ -105,6 +105,7 @@ export const tecnicosApi = {
   crear:     (data)   => api.post('/tecnicos', data),       // sedeId se asigna en el backend
   actualizar:(id, d)  => api.put(`/tecnicos/${id}`, d),
   resetPassword: (id, data)  => api.post(`/tecnicos/${id}/reset-password`, data),
+  ubicaciones: (params) => api.get('/tecnicos/ubicaciones', { params }),
 };
 
 // Órdenes — el admin solo ve/crea las de su sede (backend lo filtra automáticamente)

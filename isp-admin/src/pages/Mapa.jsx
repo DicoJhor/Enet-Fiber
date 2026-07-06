@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { Search, Plus, X, Trash2, Pencil, Crosshair, Radar, Navigation, Upload, SlidersHorizontal, Layers } from 'lucide-react';
 import toast from 'react-hot-toast';
 import 'leaflet/dist/leaflet.css';
-import { contratosApi, puntosRedApi, sedesApi } from '../services/api';
+import { contratosApi, puntosRedApi, sedesApi, tecnicosApi } from '../services/api';
 import { useAuthStore } from '../store/auth.store';
 
 const ESTADO_CFG = {
@@ -85,6 +85,31 @@ function iconoConsulta() {
     iconSize: [26, 26],
     iconAnchor: [13, 26],
     popupAnchor: [0, -26],
+  });
+}
+
+function iconoTecnico(activo, iniciales) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:30px;height:30px;
+      background:${activo ? '#3fb950' : '#94a3b8'};
+      border:3px solid #fff;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 6px rgba(0,0,0,0.4);
+      color:#fff;font-weight:800;font-size:11px;font-family:sans-serif;
+      ${activo ? 'animation: pulse-tecnico 2s infinite;' : ''}
+    ">${iniciales}</div>
+    <style>
+      @keyframes pulse-tecnico {
+        0%   { box-shadow: 0 2px 6px rgba(0,0,0,0.4), 0 0 0 0 rgba(63,185,80,0.5); }
+        70%  { box-shadow: 0 2px 6px rgba(0,0,0,0.4), 0 0 0 10px rgba(63,185,80,0); }
+        100% { box-shadow: 0 2px 6px rgba(0,0,0,0.4), 0 0 0 0 rgba(63,185,80,0); }
+      }
+    </style>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
   });
 }
 
@@ -201,6 +226,16 @@ export default function MapaPage() {
   const [search,         setSearch]         = useState('');
   const [verClientes,    setVerClientes]    = useState(true);
   const [verPuntos,      setVerPuntos]      = useState(true);
+  const [verTecnicos,    setVerTecnicos]    = useState(true);
+
+  const { data: dataTecnicos } = useQuery({
+    queryKey: ['tecnicos-ubicaciones'],
+    queryFn:  () => tecnicosApi.ubicaciones().then(r => r.data),
+    refetchInterval: 15_000,
+    staleTime: 0,
+  });
+
+  const tecnicosUbicacion = (dataTecnicos || []).filter(t => t.ultimaLat && t.ultimaLng);
 
   const [modoAgregar, setModoAgregar] = useState(false);
   const [modalForm,   setModalForm]   = useState(null);
@@ -489,6 +524,37 @@ export default function MapaPage() {
               </Marker>
             );
           })}
+
+          {verTecnicos && tecnicosUbicacion.map(t => {
+              const minutosDesdeUltima = (Date.now() - new Date(t.ultimaUbicacionAt).getTime()) / 60000;
+              const activo = minutosDesdeUltima < 5;
+              const iniciales = `${t.usuario.nombre?.[0] || ''}${t.usuario.apellido?.[0] || ''}`.toUpperCase();
+
+              return (
+                <Marker key={`t-${t.id}`} position={[t.ultimaLat, t.ultimaLng]} icon={iconoTecnico(activo, iniciales)}>
+                  <Popup>
+                  <div style={{ minWidth: 170 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+                      👷 {t.usuario.nombre} {t.usuario.apellido}
+                    </div>
+                    <div style={{ fontSize: 11, color: activo ? '#3fb950' : '#94a3b8', fontWeight: 600, marginBottom: 4 }}>
+                      {activo ? '● En línea' : '○ Sin señal reciente'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#666' }}>
+                      Últ. actualización: {Math.round(minutosDesdeUltima)} min
+                    </div>
+                    {t.usuario.telefono && (
+                      <div style={{ marginTop: 6 }}>
+                        <a href={`tel:${t.usuario.telefono}`} style={{ fontSize: 11, color: '#3b9fd4', fontWeight: 700 }}>
+                          📞 Llamar
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </div>
 
@@ -713,6 +779,10 @@ export default function MapaPage() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--txt-2)', cursor: 'pointer', marginBottom: 10 }}>
                 <input type="checkbox" checked={verPuntos} onChange={e => setVerPuntos(e.target.checked)}/> Puntos de red
               </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--txt-2)', cursor: 'pointer', marginBottom: 10 }}>
+                <input type="checkbox" checked={verTecnicos} onChange={e => setVerTecnicos(e.target.checked)}/> Técnicos
+              </label>
+
               <div style={{ height: 1, background: 'var(--border)', marginBottom: 10 }}/>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {verClientes && Object.entries(ESTADO_CFG).map(([k, v]) => (
@@ -725,6 +795,17 @@ export default function MapaPage() {
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: v.color, border: '2px solid #fff' }}/> {v.label}
                   </div>
                 ))}
+
+                {verTecnicos && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--txt-3)' }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3fb950', border: '2px solid #fff' }}/> Técnico en línea
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--txt-3)' }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8', border: '2px solid #fff' }}/> Sin señal reciente
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </PanelFlotante>
@@ -733,7 +814,7 @@ export default function MapaPage() {
 
       {/* ── Abajo-derecha: contador ── */}
       <div style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 500, ...cajaFlotante, padding: '7px 12px', fontSize: 11, color: 'var(--txt-3)' }}>
-        {isLoading ? 'Cargando...' : `${clientes.length} cli. · ${puntos.length} pto.`}
+        {isLoading ? 'Cargando...' : `${clientes.length} cli. · ${puntos.length} pto. · ${tecnicosUbicacion.length} téc.`}
       </div>
 
       {/* ── Banner modo agregar (centrado abajo) ── */}

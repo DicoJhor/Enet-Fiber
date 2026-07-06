@@ -279,5 +279,75 @@ const resetPassword = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ─────────────────────────────────────────────────────────────
+// PATCH /api/tecnicos/mi-ubicacion
+// El técnico reporta su posición actual (desde la app móvil)
+// ─────────────────────────────────────────────────────────────
+const reportarUbicacion = async (req, res, next) => {
+  try {
+    const { lat, lng } = req.body;
 
-module.exports = { listar, obtener, crear, actualizar, resetPassword };
+    if (lat === undefined || lng === undefined)
+      return res.status(400).json({ error: 'lat y lng son obligatorios' });
+
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+
+    if (isNaN(latNum) || isNaN(lngNum) || latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180)
+      return res.status(400).json({ error: 'Coordenadas inválidas' });
+
+    const tecnico = await prisma.tecnico.findUnique({
+      where:  { usuarioId: req.usuario.id },
+      select: { id: true },
+    });
+
+    if (!tecnico) return res.status(403).json({ error: 'Tu usuario no tiene perfil de técnico' });
+
+    await prisma.tecnico.update({
+      where: { id: tecnico.id },
+      data: {
+        ultimaLat:         latNum,
+        ultimaLng:         lngNum,
+        ultimaUbicacionAt: new Date(),
+      },
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/tecnicos/ubicaciones
+// SUPERADMIN → todos los técnicos activos (puede filtrar por sedeId)
+// ADMIN       → solo los técnicos activos de su sede
+// ─────────────────────────────────────────────────────────────
+const obtenerUbicaciones = async (req, res, next) => {
+  try {
+    const { sedeId } = req.query;
+
+    const where = { activo: true, ultimaLat: { not: null } };
+
+    if (['ADMIN', 'SECRETARIA'].includes(req.usuario.rol)) {
+      where.usuario = { sedeId: req.usuario.sedeId };
+    } else if (sedeId) {
+      where.usuario = { sedeId };
+    }
+
+    const tecnicos = await prisma.tecnico.findMany({
+      where,
+      select: {
+        id: true,
+        ultimaLat: true,
+        ultimaLng: true,
+        ultimaUbicacionAt: true,
+        usuario: {
+          select: { id: true, nombre: true, apellido: true, telefono: true },
+        },
+      },
+    });
+
+    res.json(tecnicos);
+  } catch (err) { next(err); }
+};
+
+module.exports = { listar, obtener, crear, actualizar, resetPassword, reportarUbicacion, obtenerUbicaciones };
