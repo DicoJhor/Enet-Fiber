@@ -43,9 +43,8 @@ const ESTADOS_NO_FORZABLES_POR_ADMIN = ['ACEPTADA', 'EN_PROCESO', 'COMPLETADA'];
 
 // ── Helper: ¿una orden puede heredar la WAN del contrato? ──
 // Devuelve los datos WAN a heredar, o null si no aplica.
-const wanHeredableDelContrato = async (tx, numeroContrato, tipoOrden, hayTecnico, sedeId) => {
+const wanHeredableDelContrato = async (tx, numeroContrato, tipoOrden, sedeId) => {
   if (!TIPOS_NOC_TECNICO.includes(tipoOrden)) return null;
-  if (!hayTecnico) return null;
   if (!numeroContrato || !sedeId) return null;
 
   const contrato = await tx.contrato.findUnique({
@@ -136,7 +135,7 @@ const uploadPdf = multer({
 // ── GET /api/ordenes ──────────────────────────────────────────
 const listar = async (req, res, next) => {
   try {
-    const { estado, tecnicoId, page = 1, limit = 20, tipos, search, sedeId } = req.query;
+    const { estado, tecnicoId, page = 1, limit = 20, tipos, search, sedeId, fechaDesde, fechaHasta } = req.query;
     const { rol, sedeId: miSede } = req.usuario;
 
     let where = { deletedAt: null }; // excluir órdenes en papelera
@@ -176,7 +175,7 @@ const listar = async (req, res, next) => {
           ],
         }),
       };
-    }else if (rol === 'ADMIN' || rol === 'SECRETARIA') {
+    } else if (rol === 'ADMIN' || rol === 'SECRETARIA') {
       // Panel Admin: solo su sede
       where = {
         sedeId: miSede,
@@ -188,6 +187,12 @@ const listar = async (req, res, next) => {
             { abonado:   { contains: search, mode: 'insensitive' } },
             { nServicio: { contains: search } },
           ],
+        }),
+        ...((fechaDesde || fechaHasta) && {
+          fechaFin: {
+            ...(fechaDesde && { gte: new Date(fechaDesde + 'T00:00:00') }),
+            ...(fechaHasta && { lte: new Date(fechaHasta + 'T23:59:59') }),
+          },
         }),
       };
     }
@@ -444,8 +449,7 @@ const confirmarExcel = async (req, res, next) => {
           await upsertContratoDesdeOrden(tx, o, sedeId);
         
           // 2. ¿El contrato ya tiene WAN?
-          const wanHeredada = await wanHeredableDelContrato(tx, o.contrato, o.tipoOrden, asignar, sedeId);
-        
+const wanHeredada = await wanHeredableDelContrato(tx, o.contrato, o.tipoOrden, sedeId);        
           // 3. Estado inicial
           const estadoInicial = wanHeredada
             ? 'PENDIENTE_TECNICO'
@@ -553,8 +557,7 @@ const crear = async (req, res, next) => {
       await upsertContratoDesdeOrden(tx, { contrato, abonado, dni, celular, direccion, referencia: null, sector }, sedeId);
 
       // ¿El contrato ya tiene WAN? (en 'crear' no se asigna técnico → no hereda)
-      const wanHeredada = await wanHeredableDelContrato(tx, contrato, tipoOrden, false, sedeId);
-
+const wanHeredada = await wanHeredableDelContrato(tx, contrato, tipoOrden, sedeId);
       const estadoInicial = wanHeredada
         ? 'PENDIENTE_TECNICO'
         : (TIPOS_NOC.includes(tipoOrden) ? 'PENDIENTE_NOC' : 'PENDIENTE_TECNICO');
@@ -613,7 +616,7 @@ const asignar = async (req, res, next) => {
     // Solo aplica si la orden todavía no tiene WAN propia (no pisar una ya configurada).
     const orden = await prisma.$transaction(async (tx) => {
       const wanHeredada = !ordenActual.ipWan
-        ? await wanHeredableDelContrato(tx, ordenActual.contrato, ordenActual.tipoOrden, true, ordenActual.sedeId)
+        ? await wanHeredableDelContrato(tx, ordenActual.contrato, ordenActual.tipoOrden, ordenActual.sedeId)
         : null;
 
       // Estado final:
@@ -1239,5 +1242,6 @@ module.exports = {
   listar, obtener, subirExcel, confirmarExcel, crear,
   asignar, ponerWan, nocCompletar, aceptar, cambiarEstado,
   stats, actualizarDatos, historialWan, reportes, notificaciones,
-  eliminar, restaurar, papelera,
+  eliminar, restaurar, papelera, upsertContratoDesdeOrden,wanHeredableDelContrato,
+  TIPOS_NOC,
 };

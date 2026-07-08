@@ -437,10 +437,16 @@ export default function DevolucionesPage() {
   const invalidar = () => qc.invalidateQueries({ queryKey: ['devoluciones'] });
 
   const mutAprobar = useMutation({
-    mutationFn: (id) => stockApi.aprobarDevolucion(id),
-    onSuccess:  () => { toast.success('Devolución aprobada ✅'); invalidar(); },
-    onError:    (e) => toast.error(e.response?.data?.error || 'Error al aprobar'),
-  });
+  mutationFn: (id) => stockApi.aprobarDevolucion(id),
+  onSuccess:  () => {
+    toast.success('Devolución aprobada ✅');
+    invalidar();
+    qc.invalidateQueries({ queryKey: ['inventario-tecnico'] });
+    qc.invalidateQueries({ queryKey: ['onus-panel-inline'] });
+    qc.invalidateQueries({ queryKey: ['onus-existentes'] });
+  },
+  onError: (e) => toast.error(e.response?.data?.error || 'Error al aprobar'),
+});
 
   const mutRechazar = useMutation({
     mutationFn: ({ id, motivo }) => stockApi.rechazarDevolucion(id, { motivo }),
@@ -449,14 +455,17 @@ export default function DevolucionesPage() {
   });
 
   const mutRevisarRecojo = useMutation({
-    mutationFn: ({ recojoId, resultado }) => stockApi.revisarRecojo(recojoId, { resultado }),
-    onSuccess:  (_, v) => {
-      toast.success(v.resultado === 'bueno' ? '✅ Equipo sumado al stock' : '⚠ Equipo registrado como malogrado');
-      invalidar();
-      qc.invalidateQueries({ queryKey: ['malogrados'] });
-    },
-    onError: (e) => toast.error(e.response?.data?.error || 'Error'),
-  });
+  mutationFn: ({ recojoId, resultado }) => stockApi.revisarRecojo(recojoId, { resultado }),
+  onSuccess:  (_, v) => {
+    toast.success(v.resultado === 'bueno' ? '✅ Equipo sumado al stock' : '⚠ Equipo registrado como malogrado');
+    invalidar();
+    qc.invalidateQueries({ queryKey: ['malogrados'] });
+    qc.invalidateQueries({ queryKey: ['inventario-tecnico'] });
+    qc.invalidateQueries({ queryKey: ['onus-panel-inline'] });
+    qc.invalidateQueries({ queryKey: ['onus-existentes'] });
+  },
+  onError: (e) => toast.error(e.response?.data?.error || 'Error'),
+});
 
   const mutRevisarDetalle = useMutation({
     mutationFn: ({ detalleId, cantidadBuena, cantidadMala }) =>

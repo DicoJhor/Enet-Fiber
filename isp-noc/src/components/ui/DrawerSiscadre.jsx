@@ -49,18 +49,21 @@ export default function DrawerSiscadre({ sedeId, sedeNombre, onCerrar }) {
   });
 
   useEffect(() => {
-    if (config) {
-      setForm(f => ({
-        ...f,
-        host:     config.siscadreHost     || '',
-        port:     String(config.siscadrePort || '3306'),
-        user:     config.siscadreUser     || '',
-        password: '',
-        database: config.siscadreDatabase || '',
-        script:   config.siscadreScript   || '',
-      }));
-    }
-  }, [config]);
+  if (config) {
+    setForm({
+      host:     config.siscadreHost     || '',
+      port:     String(config.siscadrePort || '3306'),
+      user:     config.siscadreUser     || '',
+      password: '',
+      database: config.siscadreDatabase || '',
+      script:   config.siscadreScript   || '',
+    });
+  } else {
+    setForm({ host: '', port: '3306', user: '', password: '', database: '', script: '' });
+  }
+  setEstadoConexion(null);
+  setShowScript(false);
+}, [sedeId, config]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 

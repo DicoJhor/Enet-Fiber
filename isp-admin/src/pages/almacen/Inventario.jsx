@@ -388,12 +388,13 @@ export default function AdminAlmacenInventario() {
   const sedesQ          = useQuery({ queryKey: ['sedes-para-envio'], queryFn: () => sedesApi.listarParaEnvio().then(r => r.data) });
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ['admin-stock-sede'] });
-    qc.invalidateQueries({ queryKey: ['admin-stock-stats'] });
-    qc.invalidateQueries({ queryKey: ['admin-stock-auditoria'] });
-    qc.invalidateQueries({ queryKey: ['onus-panel-inline'] });
-    qc.invalidateQueries({ queryKey: ['onus-existentes'] });
-  };
+  qc.invalidateQueries({ queryKey: ['admin-stock-sede'] });
+  qc.invalidateQueries({ queryKey: ['admin-stock-stats'] });
+  qc.invalidateQueries({ queryKey: ['admin-stock-auditoria'] });
+  qc.invalidateQueries({ queryKey: ['onus-panel-inline'] });
+  qc.invalidateQueries({ queryKey: ['onus-existentes'] });
+  qc.invalidateQueries({ queryKey: ['inventario-tecnico'] });
+};
 
   const entradaItemsValidos = entrada.items.filter(i => i.producto_id && Number(i.cantidad) > 0);
 

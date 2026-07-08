@@ -80,6 +80,9 @@ CREATE TABLE "tecnicos" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "sedeId" VARCHAR(36),
+    "ultima_lat" DOUBLE PRECISION,
+    "ultima_lng" DOUBLE PRECISION,
+    "ultima_ubicacion_at" TIMESTAMP(3),
 
     CONSTRAINT "tecnicos_pkey" PRIMARY KEY ("id")
 );

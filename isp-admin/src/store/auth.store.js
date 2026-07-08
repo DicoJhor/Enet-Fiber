@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authApi } from '../services/api';
+import { queryClient } from '../queryClient';
 
 const cargarUsuarioInicial = () => {
   try {
@@ -112,7 +113,8 @@ export const useAuthStore = create((set, get) => ({
     localStorage.removeItem('admin_refresh_token');
     localStorage.removeItem('admin_usuario');
     set({ token: null, refreshToken: null, usuario: null, requiere2FA: false });
-  },
+    queryClient.clear();
+},
 
   updateUsuario: (cambios) => {
     set((state) => {

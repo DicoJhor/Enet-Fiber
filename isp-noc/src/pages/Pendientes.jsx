@@ -915,7 +915,7 @@ export default function PendientesPage() {
   const { data: dataWan, isLoading, refetch, isFetching } = useQuery({
   queryKey: ['noc-pendientes-wan', sedeSel],
   queryFn: () => ordenesApi.listar(withSede({
-    estado: 'PENDIENTE_NOC', tipos: TODOS_TECNICO.join(','), limit: 50, _t: Date.now(),
+    estado: 'PENDIENTE_NOC', tipos: TODOS_TECNICO.join(','), limit: 100, _t: Date.now(),
   }, sedeSel)).then(r => r.data),
   refetchInterval: 20000,
   staleTime: 0,
@@ -925,7 +925,7 @@ export default function PendientesPage() {
 const { data: dataCompletar } = useQuery({
   queryKey: ['noc-pendientes-completar', sedeSel],
   queryFn: () => ordenesApi.listar(withSede({
-    estado: 'PENDIENTE_NOC', tipos: TIPOS_NOC_COMPLETA.join(','), limit: 50, _t: Date.now(),
+    estado: 'PENDIENTE_NOC', tipos: TIPOS_NOC_COMPLETA.join(','), limit: 100, _t: Date.now(),
   }, sedeSel)).then(r => r.data),
   refetchInterval: 20000,
   staleTime: 0,
@@ -935,7 +935,7 @@ const { data: dataCompletar } = useQuery({
 const { data: dataConfiguradas } = useQuery({
   queryKey: ['noc-configuradas', sedeSel],
   queryFn: () => ordenesApi.listar(withSede({
-    estado: 'PENDIENTE_TECNICO', tipos: TODOS_TECNICO.join(','), limit: 50, _t: Date.now(),
+    estado: 'PENDIENTE_TECNICO', tipos: TODOS_TECNICO.join(','), limit: 100, _t: Date.now(),
   }, sedeSel)).then(r => r.data),
   refetchInterval: 20000,
   staleTime: 0,

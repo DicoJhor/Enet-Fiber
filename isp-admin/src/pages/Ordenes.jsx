@@ -5,7 +5,7 @@ import { Upload, Search, RefreshCw, X, Database } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ordenesApi, tecnicosApi, siscadreApi } from '../services/api';
 import { Card, EstadoBadge, Table, Tr, Td, Btn, Modal, Input, Select, Spinner, Empty, TimerBadge } from '../components/ui';
-import { fmtFecha, TIPO_COLOR, ESTADO_CONFIG } from '../utils/helpers';
+import { fmtFecha, fmtFechaHora, TIPO_COLOR, ESTADO_CONFIG } from '../utils/helpers';
 import { useTiposOrden } from '../hooks/useTiposOrden';
 import DrawerOrden from '../components/DrawerOrden';
 import { useAuthStore } from '../store/auth.store';
@@ -267,7 +267,7 @@ export default function OrdenesPage() {
   const [showExcel, setShowExcel]           = useState(false);
   const [ordenDrawer, setOrdenDrawer]       = useState(null);
   const [tab, setTab]                       = useState('todos');
-  const [filters, setFilters]               = useState({ estado: searchParams.get('estado') || '', search: '', tecnicoId: '' });
+  const [filters, setFilters] = useState({ estado: searchParams.get('estado') || '', search: '', tecnicoId: '', fechaDesde: '', fechaHasta: '' });
   const [page, setPage]                     = useState(1);
   const [searchOpen, setSearchOpen]         = useState(false);
   const [spinning, setSpinning]             = useState(false);
@@ -321,6 +321,8 @@ export default function OrdenesPage() {
       ...(tab === 'cable'    && { tipos: (grupos.CABLE    || []).join(',') }),
       ...(tab === 'duo'      && { tipos: (grupos.DUO      || []).join(',') }),
       ...(filters.tecnicoId  && { tecnicoId: filters.tecnicoId }),
+      ...(filters.fechaDesde && { fechaDesde: filters.fechaDesde }),
+      ...(filters.fechaHasta && { fechaHasta: filters.fechaHasta }),
     }).then(r => r.data),
     refetchInterval: 30000,
   });
@@ -470,8 +472,41 @@ export default function OrdenesPage() {
             ))}
           </select>
 
-          {(filters.estado || filters.search || filters.tecnicoId) && (
-            <Btn variant="ghost" size="sm" onClick={() => { setFilters({ estado: '', search: '', tecnicoId: '' }); setPage(1); }} icon={<X size={12} />}>Limpiar</Btn>
+          {filters.estado === 'COMPLETADA' && (
+            <div style={{ display: 'flex', gap: 10, width: isMobile ? '100%' : 'auto' }}>
+              <input
+                type="date"
+                value={filters.fechaDesde}
+                onChange={e => { setFilters(p => ({ ...p, fechaDesde: e.target.value })); setPage(1); }}
+                style={{ 
+                  padding: '7px 10px', background: 'var(--bg-3)', 
+                  border: `1px solid ${filters.fechaDesde ? 'var(--accent)' : 'var(--border-2)'}`, 
+                  borderRadius: 8, color: filters.fechaDesde ? 'var(--accent)' : 'var(--txt-2)', 
+                  fontSize: 12, outline: 'none', fontFamily: 'inherit',
+                  flex: isMobile ? 1 : 'none',
+                  minWidth: 0,
+                }}
+                title="Completadas desde"
+              />
+              <input
+                type="date"
+                value={filters.fechaHasta}
+                onChange={e => { setFilters(p => ({ ...p, fechaHasta: e.target.value })); setPage(1); }}
+                style={{ 
+                  padding: '7px 10px', background: 'var(--bg-3)', 
+                  border: `1px solid ${filters.fechaHasta ? 'var(--accent)' : 'var(--border-2)'}`, 
+                  borderRadius: 8, color: filters.fechaHasta ? 'var(--accent)' : 'var(--txt-2)', 
+                  fontSize: 12, outline: 'none', fontFamily: 'inherit',
+                  flex: isMobile ? 1 : 'none',
+                  minWidth: 0,
+                }}
+                title="Completadas hasta"
+              />
+            </div>
+          )}
+
+          {(filters.estado || filters.search || filters.tecnicoId || filters.fechaDesde || filters.fechaHasta) && (
+            <Btn variant="ghost" size="sm" onClick={() => { setFilters({ estado: '', search: '', tecnicoId: '', fechaDesde: '', fechaHasta: '' }); setPage(1); }} icon={<X size={12} />}>Limpiar</Btn>
           )}
         </div>
       </Card>
@@ -496,7 +531,7 @@ export default function OrdenesPage() {
         ) : (
           <Table loading={isLoading}
           headers={[
-              'N°','Abonado','Dirección / Referencia','Servicio','Fecha','Estado','Técnico',
+              'N°','Abonado','Dirección / Referencia','Servicio','Fecha','Estado','Técnico','Completado',
             ]}>
             {ordenes.length === 0 && !isLoading ? (
               <tr><td colSpan={7}><Empty icon="📋" title="Sin órdenes" subtitle="Importa un Excel para comenzar" /></td></tr>
@@ -525,6 +560,11 @@ export default function OrdenesPage() {
                   <Td><EstadoBadge estado={o.estado} /></Td>
                   <Td style={{ fontSize: 12, color: 'var(--txt-2)' }}>
                     {o.tecnico ? `${o.tecnico.usuario.nombre} ${o.tecnico.usuario.apellido}` : <span style={{ color: 'var(--txt-3)' }}>Sin técnico</span>}
+                  </Td>
+                  <Td style={{ fontSize: 12, color: 'var(--txt-2)', whiteSpace: 'nowrap' }}>
+                    {o.estado === 'COMPLETADA' && o.fechaFin
+                      ? fmtFechaHora(o.fechaFin)
+                      : <span style={{ color: 'var(--txt-3)' }}>—</span>}
                   </Td>
                 </Tr>
               );

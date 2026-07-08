@@ -32,9 +32,7 @@ import AdminAlmacenReportes   from './pages/almacen/Reportes';
 import DevolucionesPage from './pages/Devoluciones';
  
 
-const qc = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
-});
+import { queryClient } from './queryClient';
 
 function ProtectedRoute({ children }) {
   const token = useAuthStore(s => s.token);
@@ -81,7 +79,7 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <QueryClientProvider client={qc}>
+  <QueryClientProvider client={queryClient}>
     <App />
     <Toaster position="top-right" toastOptions={{
       style: { background: 'var(--bg-2)', color: 'var(--txt)', border: '1px solid var(--border-2)', fontSize: 13, borderRadius: 10 },

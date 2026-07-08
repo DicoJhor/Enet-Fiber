@@ -436,6 +436,17 @@ const aprobarDevolucion = async (req, res, next) => {
             data: { cantidad: { decrement: 1 } },
           });
         }
+          // FIX: liberar la ONU del técnico de inmediato al aprobar (no esperar
+          // al bueno/malo). Se marca cliente como "revision_pendiente" para que
+          // tampoco pueda seleccionarse como disponible en otra instalación
+          // mientras sigue pendiente de revisión.
+          if (r?.tipoEquipo === 'ONU' && r?.codigoPon) {
+            await tx.onu.updateMany({
+              where: { codigoPon: r.codigoPon },
+              data:  { tecnicoId: null, cliente: `revision_pendiente#${devolucionId}` },
+            });
+          }
+
       }
 
       await tx.devolucionTecnico.update({

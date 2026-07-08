@@ -1,6 +1,7 @@
 const prisma = require('../utils/prisma');
 const mysql  = require('mysql2/promise');
 const { encrypt, decrypt } = require('./siscadre/encryption');
+const { upsertContratoDesdeOrden, wanHeredableDelContrato } = require('./ordenes.controller');
 const { TIPOS_NOC_TECNICO } = require('../utils/tipoOrden');
 
 
@@ -301,37 +302,59 @@ const sincronizar = async (req, res, next) => {
 
         // Asegurar que el contrato exista antes de crear la orden
         // (misma lógica que confirmarExcel en contratos.controller.js)
-        if (numeroContrato) {
-          await prisma.contrato.upsert({
-            where: { numero_sedeId: { numero: numeroContrato, sedeId } },
-            create: {
-              numero: numeroContrato,
-              abonado,
-              dni,
-              celular,
-              direccion,
-              referencia,
-              sector,
-              sedeId,
-            },
-            update: {
-              abonado,
-              direccion,
-              ...(dni        && { dni }),
-              ...(celular    && { celular }),
-              ...(referencia && { referencia }),
-              ...(sector     && { sector }),
-              // sedeId NO se actualiza — el contrato vive en la sede que lo creó
-            },
-          });
-        }
+        // Reutiliza exactamente la misma lógica que usa el import de Excel
+        await upsertContratoDesdeOrden(prisma, {
+          contrato:   numeroContrato,
+          tipoOrden,
+          abonado,
+          dni,
+          celular,
+          direccion,
+          referencia,
+          sector,
+        }, sedeId);
+
+        // Verificar si el contrato ya tiene WAN registrada de una instalación previa
+        const wanHeredada = await wanHeredableDelContrato(prisma, numeroContrato, tipoOrden, sedeId);
+
+        // ── Resolver plan desde mensualidad (misma lógica que confirmarExcel) ──
+          let planId = null;
+          let mbps   = null;
+
+          if (mensualidad != null && !isNaN(mensualidad)) {
+            const esInternet = tipoOrden.endsWith('_I');
+            const esDuo      = tipoOrden.endsWith('_D');
+
+            if (esInternet || esDuo) {
+              const tipoServicioPlan = esInternet ? 'INTERNET' : 'DUO';
+              const plan = await prisma.planInternet.findFirst({
+                where: { sedeId, activo: true, precio: { equals: mensualidad }, tipoServicio: tipoServicioPlan },
+              });
+              if (plan) {
+                planId = plan.id;
+                mbps   = plan.mbps;
+              }
+            }
+          }
+
+          // Actualizar mbps en el contrato si se resolvió un plan
+          if (numeroContrato && planId) {
+            await prisma.contrato.update({
+              where: { numero_sedeId: { numero: numeroContrato, sedeId } },
+              data:  { mbps, planId },
+            });
+          }
+
+        const estadoFinal = wanHeredada
+          ? 'PENDIENTE_TECNICO'
+          : (TIPOS_NOC.includes(tipoOrden) ? 'PENDIENTE_NOC' : 'PENDIENTE_TECNICO');
 
         await prisma.ordenServicio.create({
           data: {
             nServicio,
             codigoSiscadre: codigoCompleto,
             sedeId,
-            estado:        TIPOS_NOC.includes(tipoOrden) ? 'PENDIENTE_NOC' : 'PENDIENTE_TECNICO',
+            estado: estadoFinal,
             tipoOrden,
             fechaServicio: parsearFecha(row['FECHA CREA']),
             abonado,
@@ -339,10 +362,17 @@ const sincronizar = async (req, res, next) => {
             direccion,
             referencia,
             sector,
-            celular:       celular || 'S/N',
-            observacion:   row['OBSERVACIÓN INICIAL'] || null,
-            contrato:      numeroContrato || null,
+            celular: celular || 'S/N',
+            observacion: row['OBSERVACIÓN INICIAL'] || null,
+            contrato: numeroContrato || null,
             mensualidad,
+            ...(mbps   != null && { mbps }),
+            ...(planId != null && { planId }),
+            ...(wanHeredada && {
+              ipWan:   wanHeredada.ipWan,
+              mascara: wanHeredada.mascara,
+              gateway: wanHeredada.gateway,
+            }),
           },
         });
 
