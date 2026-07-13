@@ -15,8 +15,8 @@ router.post('/', requireRol('SUPERADMIN', 'ADMIN', 'OPERADOR_NOC', 'TECNICO'), c
 router.patch('/:id', requireRol('SUPERADMIN', 'ADMIN', 'OPERADOR_NOC', 'TECNICO'), ctrl.editar);
 
 // ── Agregar material (técnico desde su inventario) ────────────
-router.post('/:id/material', requireRol('TECNICO', 'SUPERADMIN', 'ADMIN'), ctrl.agregarMaterial);
-
+//router.post('/:id/material', requireRol('TECNICO', 'SUPERADMIN', 'ADMIN'), ctrl.agregarMaterial);
+router.post('/:id/material', requireRol('TECNICO'), ctrl.agregarMaterial);
 // ── Completar trabajo ─────────────────────────────────────────
 router.post('/:id/completar', requireRol('SUPERADMIN', 'ADMIN', 'OPERADOR_NOC', 'TECNICO'), ctrl.completar);
 

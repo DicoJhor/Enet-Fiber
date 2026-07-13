@@ -14,6 +14,20 @@ const MAX_FOTOS = 8;
 const MIN_FOTOS = 1;
 
 // ── Multer fotos ──────────────────────────────────────────────
+
+const sharp = require('sharp');
+
+const uploadFotos = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const tipos = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!tipos.includes(file.mimetype)) return cb(new Error('Solo JPEG, PNG o WebP'), false);
+    cb(null, true);
+  },
+  limits: { fileSize: 15 * 1024 * 1024, files: MAX_FOTOS },
+}).array('fotos', MAX_FOTOS);
+
+/*
 const storageFotos = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = path.join(__dirname, '../../uploads/fotos', req.params.instalacionId || 'tmp');
@@ -25,6 +39,8 @@ const storageFotos = multer.diskStorage({
     cb(null, `${Date.now()}-${Math.round(Math.random()*1e9)}${ext}`);
   },
 });
+
+
 const uploadFotos = multer({
   storage: storageFotos,
   fileFilter: (req, file, cb) => {
@@ -35,6 +51,7 @@ const uploadFotos = multer({
   limits: { fileSize: 15 * 1024 * 1024, files: MAX_FOTOS },
 }).array('fotos', MAX_FOTOS);
 
+*/
 // ── POST /api/instalaciones/iniciar/:ordenId ──────────────────
 const iniciar = async (req, res, next) => {
   try {
@@ -126,6 +143,76 @@ const subirFotos = async (req, res, next) => {
       return res.status(403).json({ error: 'No autorizado' });
 
     uploadFotos(req, res, async (err) => {
+      if (err)                   return res.status(400).json({ error: err.message });
+      if (!req.files?.length)    return res.status(400).json({ error: 'No se subieron fotos' });
+
+      // Validación: máximo MAX_FOTOS fotos (antes de procesar nada)
+      if (req.files.length > MAX_FOTOS) {
+        return res.status(400).json({ error: `Máximo ${MAX_FOTOS} fotos por instalación` });
+      }
+
+      // Generar tipos automáticos si no se envían (FOTO_1, FOTO_2, ...)
+      const tiposRaw = (req.body.tipos || '').split(',').map(t => t.trim()).filter(Boolean);
+      const tipos = req.files.map((_, i) => tiposRaw[i] || `FOTO_${i + 1}`);
+
+      const dir = path.join(__dirname, '../../uploads/fotos', req.params.instalacionId);
+      fs.mkdirSync(dir, { recursive: true });
+
+      const escritos = []; // rutas ya escritas a disco, para poder limpiar si algo falla
+      const limpiar = () => escritos.forEach(p => { try { fs.unlinkSync(p); } catch {} });
+
+      try {
+        // Re-codificar cada foto a WebP en el servidor, sin importar cómo llegó
+        const procesadas = await Promise.all(
+          req.files.map(async (file, i) => {
+            const buffer = await sharp(file.buffer)
+              .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+              .webp({ quality: 80 })
+              .toBuffer();
+
+            const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`;
+            const rutaAbsoluta = path.join(dir, filename);
+            fs.writeFileSync(rutaAbsoluta, buffer);
+            escritos.push(rutaAbsoluta);
+
+            return {
+              tipo:          tipos[i],
+              url:           `/uploads/fotos/${req.params.instalacionId}/${filename}`,
+              nombreArchivo: filename,
+              tamanio:       buffer.length,
+            };
+          })
+        );
+
+        // Guardar todo en transacción — si una falla, ninguna queda
+        const fotos = await prisma.$transaction(
+          procesadas.map((p) =>
+            prisma.fotoInstalacion.create({
+              data: { instalacionId: req.params.instalacionId, ...p },
+            })
+          )
+        );
+        res.json({ fotos, mensaje: `${fotos.length} foto(s) subida(s)` });
+      } catch (procesoErr) {
+        limpiar();
+        next(procesoErr);
+      }
+    });
+  } catch (err) { next(err); }
+};
+
+/*
+const subirFotos = async (req, res, next) => {
+  try {
+    const inst = await prisma.instalacion.findUnique({
+      where: { id: req.params.instalacionId },
+      include: { orden: { include: { tecnico: true } } },
+    });
+    if (!inst) return res.status(404).json({ error: 'Instalación no encontrada' });
+    if (inst.orden.tecnico?.usuarioId !== req.usuario.id)
+      return res.status(403).json({ error: 'No autorizado' });
+
+    uploadFotos(req, res, async (err) => {
       // Helper para limpiar archivos en caso de error
       const limpiar = () => req.files?.forEach(f => { try { fs.unlinkSync(f.path); } catch {} });
 
@@ -166,7 +253,7 @@ const subirFotos = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-
+*/
 
 // ── POST /api/instalaciones/:instalacionId/equipo ─────────────
 const guardarEquipo = async (req, res, next) => {

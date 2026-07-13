@@ -1,32 +1,59 @@
 const prisma = require('../utils/prisma');
 
+// Devuelve el registro del técnico logueado si está asignado a ese trabajo;
+// null si no es técnico o no está asignado. Se reutiliza en obtener/editar/
+// completar/agregarMaterial para no repetir la misma verificación 4 veces.
+const tecnicoAsignado = async (trabajoId, usuarioId) => {
+  const tecnico = await prisma.tecnico.findUnique({
+    where: { usuarioId },
+    select: { id: true },
+  });
+  if (!tecnico) return null;
+  const asignacion = await prisma.tecnicoEnTrabajoPE.findUnique({
+    where: { trabajoId_tecnicoId: { trabajoId, tecnicoId: tecnico.id } },
+  });
+  return asignacion ? tecnico : null;
+};
+
+
 // ── GET /api/planta-externa ───────────────────────────────────
 const listar = async (req, res, next) => {
   try {
     const { rol, sedeId: miSede } = req.usuario;
     const { tipo, estado } = req.query;
 
-    const where = {
-      ...(rol === 'ADMIN' || rol === 'SECRETARIA' ? { sedeId: miSede } : {}),
+    let where = {
       ...(tipo   && { tipo }),
       ...(estado && { estado }),
     };
 
+    if (rol === 'ADMIN' || rol === 'SECRETARIA') {
+      where.sedeId = miSede;
+    } else if (rol === 'TECNICO') {
+      const tecnico = await prisma.tecnico.findUnique({
+        where: { usuarioId: req.usuario.id },
+        select: { id: true },
+      });
+      if (!tecnico) return res.status(404).json({ error: 'Técnico no encontrado' });
+      where.tecnicos = { some: { tecnicoId: tecnico.id } };
+    }
+    // SUPERADMIN y OPERADOR_NOC: sin filtro adicional, ven todas las sedes
+
     const trabajos = await prisma.trabajoPlantaExterna.findMany({
-  where,
-  include: {
-    tecnicos: {
+      where,
       include: {
-        tecnico: {
-          include: { usuario: { select: { nombre: true, apellido: true } } },
+        tecnicos: {
+          include: {
+            tecnico: {
+              include: { usuario: { select: { nombre: true, apellido: true } } },
+            },
+          },
         },
+        consumos: { select: { id: true } },
+        sede: { select: { nombre: true } },
       },
-    },
-    consumos: { select: { id: true } }, // solo para contar
-    sede: { select: { nombre: true } },
-  },
-  orderBy: { createdAt: 'desc' },
-});
+      orderBy: { createdAt: 'desc' },
+    });
 
     res.json(trabajos);
   } catch (err) { next(err); }
@@ -53,6 +80,11 @@ const obtener = async (req, res, next) => {
 
     if (['ADMIN', 'SECRETARIA'].includes(req.usuario.rol) && trabajo.sedeId !== req.usuario.sedeId)
       return res.status(403).json({ error: 'No tienes acceso a este trabajo' });
+
+    if (req.usuario.rol === 'TECNICO') {
+      const tecnico = await tecnicoAsignado(trabajo.id, req.usuario.id);
+      if (!tecnico) return res.status(403).json({ error: 'No tienes acceso a este trabajo' });
+    }
 
     // Consumos registrados por el técnico vinculados a este trabajo
     const consumos = await prisma.consumoTecnico.findMany({
@@ -156,6 +188,11 @@ const editar = async (req, res, next) => {
     if (['ADMIN', 'SECRETARIA'].includes(req.usuario.rol) && trabajo.sedeId !== req.usuario.sedeId)
       return res.status(403).json({ error: 'No tienes acceso a este trabajo' });
 
+    if (req.usuario.rol === 'TECNICO') {
+      const tecnico = await tecnicoAsignado(trabajo.id, req.usuario.id);
+      if (!tecnico) return res.status(403).json({ error: 'No tienes acceso a este trabajo' });
+    }
+
     const actualizado = await prisma.trabajoPlantaExterna.update({
       where: { id: req.params.id },
       data: {
@@ -192,6 +229,11 @@ const agregarMaterial = async (req, res, next) => {
       select: { id: true, sedeId: true },
     });
     if (!tecnico) return res.status(404).json({ error: 'Técnico no encontrado' });
+
+    const asignacion = await prisma.tecnicoEnTrabajoPE.findUnique({
+      where: { trabajoId_tecnicoId: { trabajoId: trabajo.id, tecnicoId: tecnico.id } },
+    });
+    if (!asignacion) return res.status(403).json({ error: 'No estás asignado a este trabajo' });
 
     const itemsValidos = items
       .filter(i => i.productoId && Number(i.cantidad) > 0)
@@ -235,6 +277,11 @@ const completar = async (req, res, next) => {
     if (['ADMIN', 'SECRETARIA'].includes(req.usuario.rol) && trabajo.sedeId !== req.usuario.sedeId)
       return res.status(403).json({ error: 'No tienes acceso a este trabajo' });
 
+    if (req.usuario.rol === 'TECNICO') {
+      const tecnico = await tecnicoAsignado(trabajo.id, req.usuario.id);
+      if (!tecnico) return res.status(403).json({ error: 'No tienes acceso a este trabajo' });
+    }
+
     const actualizado = await prisma.trabajoPlantaExterna.update({
       where: { id: req.params.id },
       data: {
@@ -261,6 +308,9 @@ const agregarTecnico = async (req, res, next) => {
     if (!trabajo) return res.status(404).json({ error: 'Trabajo no encontrado' });
     if (trabajo.estado === 'COMPLETADO')
       return res.status(400).json({ error: 'No se puede modificar un trabajo completado' });
+
+    if (['ADMIN', 'SECRETARIA'].includes(req.usuario.rol) && trabajo.sedeId !== req.usuario.sedeId)
+      return res.status(403).json({ error: 'No tienes acceso a este trabajo' });
 
     // Verificar que el técnico sea de la misma sede
     const tecnico = await prisma.tecnico.findUnique({
