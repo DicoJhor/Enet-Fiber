@@ -76,11 +76,17 @@ const limitadorLogin = rateLimit({
 app.use('/api/auth/login', limitadorLogin);
 
 // ─── Archivos estáticos ────────────────────────────────────────
+/*app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(__dirname, '../uploads')));*/
+
 app.use('/uploads', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
-}, express.static(path.join(__dirname, '../uploads')));
+}, express.static(path.resolve(process.cwd(), process.env.STORAGE_LOCAL_PATH || './uploads')));
 
 // ─── Sin caché para rutas API ──────────────────────────────────
 app.use('/api', (req, res, next) => {
