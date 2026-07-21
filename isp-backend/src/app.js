@@ -9,6 +9,8 @@ const { ipKeyGenerator } = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
+// ─── Confiar en el proxy (Traefik/Dokploy) para obtener la IP real del cliente ──
+app.set('trust proxy', 1);
 
 // ─── Seguridad: Helmet con headers estrictos ───────────────────
 app.use(helmet({
