@@ -1599,6 +1599,21 @@ const registrarRetiro = async (req, res, next) => {
       for (const item of items) {
         const productoId = item.productoId ? Number(item.productoId) : null;
 
+        // ── Idempotencia: si ya existe un recojo "en_mano" con este mismo
+        // codigoPon para este técnico, no crear otro. Esto evita duplicados
+        // cuando el cliente reintenta el mismo envío (p. ej. sincronización
+        // offline en carrera con un envío online directo) — sin esto, cada
+        // reintento sumaba de nuevo al inventario y creaba otra fila de Recojo.
+        if (item.codigoPon) {
+          const existente = await tx.recojo.findFirst({
+            where: { tecnicoId: tecnico.id, codigoPon: item.codigoPon, estado: 'en_mano' },
+          });
+          if (existente) {
+            resultados.push(existente);
+            continue;
+          }
+        }
+
         // 1. Crear el Recojo (historial / trazabilidad para el admin)
         const recojo = await tx.recojo.create({
           data: {
